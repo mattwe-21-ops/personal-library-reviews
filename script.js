@@ -1,152 +1,109 @@
-// Stato dell'applicazione
-let reviews = JSON.parse(localStorage.getItem('bookReviews')) || [];
-let activeAuthorFilter = null;
+// Il database del tuo blog. Quando hai una nuova recensione inseriscila qui in alto!
+const posts = [
+    {
+        id: 1,
+        titolo: "Le Storie del Mistero",
+        autore: "Lyon WGF",
+        anno: "2020",
+        genere: "Horror per Ragazzi",
+        dataLettura: "2026-06-18",
+        pagine: "144",
+        valutazione: "9 / 10",
+        trama: "Lyon, Anna e Cico si uniscono per sventare i piani di una misteriosa organizzazione che conduce esperimenti segreti nei suoi sotterranei.\nIl trio attraversa realtà piene di pericoli per scoprire la verità.",
+        personaggi: "Lyon\nAnna\nCico",
+        note: "---",
+        compilatoDa: "Matteo"
+    }
+    // I prossimi libri che leggerai li aggiungerai qui sotto divisi da una virgola
+];
 
-// Elementi del DOM
-const reviewForm = document.getElementById('reviewForm');
-const searchInput = document.getElementById('search');
-const reviewsContainer = document.getElementById('reviewsContainer');
-const reviewCount = document.getElementById('reviewCount');
+let activeAuthor = null;
+
+const blogPostsContainer = document.getElementById('blogPostsContainer');
+const searchBar = document.getElementById('searchBar');
 const authorsContainer = document.getElementById('authorsContainer');
-const authorsFilterCard = document.getElementById('authorsFilterCard');
-const clearAuthorFilter = document.getElementById('clearAuthorFilter');
+const clearFilterBtn = document.getElementById('clearFilter');
 
-// Aggiungi Nuova Recensione
-reviewForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const title = document.getElementById('title').value.trim();
-    const author = document.getElementById('author').value.trim();
-    const rating = document.getElementById('rating').value;
-    const review = document.getElementById('review').value.trim();
-
-    const newReview = {
-        id: Date.now(),
-        title: title,
-        author: author,
-        rating: parseInt(rating),
-        review: review,
-        date: new Date().toLocaleDateString('it-IT')
-    };
-
-    reviews.unshift(newReview);
-    saveAndRender();
-    reviewForm.reset();
+searchBar.addEventListener('input', renderBlog);
+clearFilterBtn.addEventListener('click', () => {
+    activeAuthor = null;
+    renderBlog();
 });
 
-// Ascolto input di ricerca
-searchInput.addEventListener('input', render);
+function renderBlog() {
+    const searchText = searchBar.value.toLowerCase();
+    blogPostsContainer.innerHTML = '';
 
-// Resetta filtro autori
-clearAuthorFilter.addEventListener('click', () => {
-    activeAuthorFilter = null;
-    render();
-});
-
-function saveAndRender() {
-    localStorage.setItem('bookReviews', JSON.stringify(reviews));
-    render();
-}
-
-// Funzione Principale di Rendering
-function render() {
-    const searchTerm = searchInput.value.toLowerCase();
-    reviewsContainer.innerHTML = '';
-
-    // Filtra elementi per ricerca e per tag autore attivo
-    const filteredReviews = reviews.filter(r => {
-        const matchesSearch = r.title.toLowerCase().includes(searchTerm) || 
-                              r.author.toLowerCase().includes(searchTerm) || 
-                              r.review.toLowerCase().includes(searchTerm);
+    // Filtra per testo e per autore selezionato
+    const filtered = posts.filter(post => {
+        const matchesSearch = post.titolo.toLowerCase().includes(searchText) ||
+                              post.autore.toLowerCase().includes(searchText) ||
+                              post.genere.toLowerCase().includes(searchText) ||
+                              post.trama.toLowerCase().includes(searchText);
         
-        const matchesAuthor = activeAuthorFilter ? r.author.toLowerCase() === activeAuthorFilter.toLowerCase() : true;
+        const matchesAuthor = activeAuthor ? post.autore === activeAuthor : true;
         
         return matchesSearch && matchesAuthor;
     });
 
-    reviewCount.textContent = filteredReviews.length;
-
-    if (filteredReviews.length === 0) {
-        reviewsContainer.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: var(--text-muted); background: white; border-radius: var(--radius); border: 1px solid var(--border);">
-                <p style="font-size: 1.1rem; font-weight: 500;">Nessuna recensione trovata</p>
-                <p style="font-size: 0.9rem; margin-top: 4px;">Aggiungi un nuovo libro o modifica i criteri di ricerca.</p>
-            </div>
-        `;
+    if (filtered.length === 0) {
+        blogPostsContainer.innerHTML = `<p style="text-align:center; color:#6e6560; padding: 40px;">Nessuna recensione corrisponde ai criteri di ricerca.</p>`;
     } else {
-        filteredReviews.forEach(r => {
-            const card = document.createElement('div');
-            card.className = 'review-card';
-            const starsVisual = '⭐'.repeat(r.rating);
-
-            card.innerHTML = `
-                <div class="review-meta">
-                    <div>
-                        <h3 class="book-title">${escapeHTML(r.title)}</h3>
-                        <p class="book-author">di <strong>${escapeHTML(r.author)}</strong> — <span style="font-size:0.85rem; color:var(--text-muted);">${r.date}</span></p>
-                    </div>
-                    <div class="stars">${starsVisual}</div>
+        filtered.forEach(post => {
+            const article = document.createElement('article');
+            article.className = 'post-card';
+            article.innerHTML = `
+                <div class="post-header">
+                    <h2 class="post-title">📚 ${escapeHTML(post.titolo)}</h2>
+                    <div class="post-meta">Scritto da <strong>${escapeHTML(post.compilatoDa)}</strong> il ${post.dataLettura}</div>
                 </div>
-                <p class="review-text">${escapeHTML(r.review)}</p>
-                <div class="review-actions">
-                    <button class="delete-btn" onclick="deleteReview(${r.id})">Elimina Recensione</button>
+
+                <table class="info-table">
+                    <tr><td class="label">Autore:</td><td>${escapeHTML(post.autore)}</td></tr>
+                    <tr><td class="label">Anno di pubblicazione:</td><td>${post.anno}</td></tr>
+                    <tr><td class="label">Genere:</td><td>${escapeHTML(post.genere)}</td></tr>
+                    <tr><td class="label">Numero pagine:</td><td>${post.pagine}</td></tr>
+                    <tr><td class="label">Valutazione:</td><td><strong>${post.valutazione}</strong></td></tr>
+                </table>
+
+                <div class="section-title">Trama</div>
+                <div class="text-block">${escapeHTML(post.trama)}</div>
+
+                <div class="section-title">Personaggi Principali</div>
+                <div class="text-block">${escapeHTML(post.personaggi)}</div>
+
+                <div class="section-title">Note aggiuntive</div>
+                <div class="text-block">${escapeHTML(post.note)}</div>
+
+                <div class="post-footer">
+                    Identikit firmato da: <strong>${escapeHTML(post.compilatoDa)}</strong>
                 </div>
             `;
-            reviewsContainer.appendChild(card);
+            blogPostsContainer.appendChild(article);
         });
     }
 
-    renderAuthorFilters();
+    renderAuthors();
 }
 
-// Genera i "pulsanti" degli autori nella sidebar
-function renderAuthorFilters() {
+function renderAuthors() {
     authorsContainer.innerHTML = '';
-    
-    if (reviews.length === 0) {
-        authorsFilterCard.style.display = 'none';
-        return;
-    }
+    const uniqueAuthors = [...new Set(posts.map(p => p.autore))].sort();
 
-    authorsFilterCard.style.display = 'block';
-    const authors = [...new Set(reviews.map(r => r.author))].sort();
-
-    authors.forEach(author => {
-        const tag = document.createElement('span');
-        tag.className = 'author-tag';
-        tag.textContent = author;
-        
-        if (activeAuthorFilter && author.toLowerCase() === activeAuthorFilter.toLowerCase()) {
-            tag.classList.add('active');
-        }
-
-        tag.addEventListener('click', () => {
-            if (activeAuthorFilter && activeAuthorFilter.toLowerCase() === author.toLowerCase()) {
-                activeAuthorFilter = null;
-            } else {
-                activeAuthorFilter = author;
-            }
-            render();
+    uniqueAuthors.forEach(author => {
+        const btn = document.createElement('span');
+        btn.className = `author-tag ${activeAuthor === author ? 'active' : ''}`;
+        btn.textContent = author;
+        btn.addEventListener('click', () => {
+            activeAuthor = activeAuthor === author ? null : author;
+            renderBlog();
         });
-
-        authorsContainer.appendChild(tag);
+        authorsContainer.appendChild(btn);
     });
 
-    clearAuthorFilter.style.display = activeAuthorFilter ? 'block' : 'none';
+    clearFilterBtn.style.display = activeAuthor ? 'inline' : 'none';
 }
 
-// Eliminazione
-window.deleteReview = function(id) {
-    if (confirm("Vuoi eliminare definitivamente questa recensione?")) {
-        reviews = reviews.filter(r => r.id !== id);
-        if (activeAuthorFilter && !reviews.some(r => r.author.toLowerCase() === activeAuthorFilter.toLowerCase())) {
-            activeAuthorFilter = null;
-        }
-        saveAndRender();
-    }
-};
-
-// Protezione base da iniezioni di codice (XSS)
 function escapeHTML(str) {
     return str.replace(/&/g, '&amp;')
               .replace(/</g, '&lt;')
@@ -155,4 +112,5 @@ function escapeHTML(str) {
               .replace(/'/g, '&#039;');
 }
 
-render();
+// Primo avvio
+renderBlog();
