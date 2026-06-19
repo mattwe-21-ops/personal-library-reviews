@@ -37,12 +37,12 @@
         .blog-posts { display: flex; flex-direction: column; gap: 40px; }
         .post-card { background-color: var(--bg-card); border-radius: var(--radius); padding: 35px; box-shadow: var(--shadow); border: 1px solid var(--border); }
         
-        /* Grafica identica ai tuoi file originali */
-        .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; color: #000; }
+        /* Integrazione stili per i tuoi documenti doc */
+        .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; color: #000; text-align: center; }
         .post-card table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .post-card td { padding: 8px; border-bottom: 1px solid #eeeeee; vertical-align: top; }
         .post-card td.label { font-weight: bold; width: 35%; color: #000; }
-        .post-card .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; font-size: 11pt; color: #000; }
+        .post-card .section-title { font-weight: bold; color: #000; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; font-size: 11pt; }
         .post-card .text-block { background-color: #f8fafc; padding: 12px; border-left: 4px solid #000; margin-bottom: 15px; white-space: pre-wrap; }
         .post-card .footer-signature { margin-top: 50px; text-align: right; font-style: italic; font-size: 11pt; border-top: 1px dashed #cccccc; padding-top: 10px; }
         
@@ -74,7 +74,6 @@
 </div>
 
 <script>
-    // ⚠️ INSERISCI QUI IL TUO USERNAME E IL NOME DELLA REPO
     const GITHUB_USER = "mattwe-21-ops"; 
     const GITHUB_REPO = "personal-library-reviews";
 
@@ -94,36 +93,31 @@
         blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">Controllo dei file su GitHub...</p>`;
         
         try {
-            // TRUCCO ANTI-CACHE: Aggiungiamo un numero casuale (?t=...) alla fine del link per costringere GitHub a darci i file reali appena caricati
             const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni?t=${Date.now()}`;
             const response = await fetch(url);
             
             if (!response.ok) throw new Error("Ancora nessuna recensione caricata o cartella non trovata.");
             
             const files = await response.json();
-            
-            // Escludiamo file segnaposto come il .gitkeep e prendiamo solo i veri file
             const fileEntries = files.filter(f => f.type === 'file' && !f.name.startsWith('.'));
 
             if (fileEntries.length === 0) {
-                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota. Carica un file per vederlo qui!</p>`;
+                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota. Carica un file dall'area riservata!</p>`;
                 renderAuthors();
                 return;
             }
 
-            // Scarichiamo il contenuto di ogni file trovato
             for (let file of fileEntries) {
-                // Anche qui usiamo il trucco anti-cache per il singolo file
                 const fileRes = await fetch(`${file.download_url}?t=${Date.now()}`);
                 const fileContent = await fileRes.text();
 
-                // Estraiamo il contenuto racchiuso nel body
+                // Estraiamo tutto ciò che sta dentro il tag html (visto che i tuoi file iniziano direttamente così)
                 const bodyMatch = fileContent.match(/<body>([\s\S]*?)<\/body>/i);
                 let cleanHTML = bodyMatch ? bodyMatch[1] : fileContent;
 
-                // Estraiamo l'autore per creare il filtro automatico
+                // NUOVO SISTEMA DI RICERCA AUTORE: Più robusto per i tuoi file personali
                 let author = "Sconosciuto";
-                const authorMatch = cleanHTML.match(/Autore del Libro:<\/td><td>([\s\S]*?)<\/td>/i);
+                const authorMatch = cleanHTML.match(/Autore del Libro:<\/td>\s*<td>([\s\S]*?)<\/td>/i);
                 if (authorMatch) {
                     author = authorMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim();
                 }
@@ -131,8 +125,7 @@
                 reviews.push({ author: author, htmlContent: cleanHTML });
             }
 
-            // Mostriamo i post dal più nuovo al più vecchio
-            reviews.reverse();
+            reviews.reverse(); // Mostra i più nuovi in alto
             renderBlog();
             
         } catch (err) {
@@ -184,7 +177,6 @@
         clearFilterBtn.style.display = activeAuthor ? 'inline' : 'none';
     }
 
-    // Avvio iniziale automatico
     loadReviewsFromGitHub();
 </script>
 </body>
