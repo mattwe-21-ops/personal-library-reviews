@@ -30,21 +30,24 @@
         .controls { display: flex; flex-direction: column; gap: 15px; margin-bottom: 40px; }
         .search-bar { width: 100%; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 1rem; box-shadow: var(--shadow); outline: none; }
         .authors-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .author-tag { background-color: #eee; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; }
+        .author-tag { background-color: #eee; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
         .author-tag.active { background-color: var(--primary); color: white; }
         .clear-filter { font-size: 0.9rem; color: #ae2012; cursor: pointer; text-decoration: underline; }
 
         .blog-posts { display: flex; flex-direction: column; gap: 40px; }
         .post-card { background-color: var(--bg-card); border-radius: var(--radius); padding: 35px; box-shadow: var(--shadow); border: 1px solid var(--border); }
         
-        /* Stili ereditati dal tuo documento originale */
-        .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+        /* Grafica identica ai tuoi file originali */
+        .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; color: #000; }
         .post-card table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .post-card td { padding: 8px; border-bottom: 1px solid #eeeeee; vertical-align: top; }
-        .post-card td.label { font-weight: bold; width: 35%; }
-        .post-card .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; font-size: 11pt; }
+        .post-card td.label { font-weight: bold; width: 35%; color: #000; }
+        .post-card .section-title { font-weight: bold; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; font-size: 11pt; color: #000; }
         .post-card .text-block { background-color: #f8fafc; padding: 12px; border-left: 4px solid #000; margin-bottom: 15px; white-space: pre-wrap; }
         .post-card .footer-signature { margin-top: 50px; text-align: right; font-style: italic; font-size: 11pt; border-top: 1px dashed #cccccc; padding-top: 10px; }
+        
+        .refresh-btn { background: #eee; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 10px; font-weight: 500; }
+        .refresh-btn:hover { background: #ddd; }
     </style>
 </head>
 <body>
@@ -53,6 +56,7 @@
     <header>
         <h1>📖 Rifugio Letterario</h1>
         <p>Bacheca pubblica delle mie recensioni</p>
+        <button class="refresh-btn" onclick="loadReviewsFromGitHub()">🔄 Controlla nuovi aggiornamenti</button>
     </header>
 
     <div class="controls">
@@ -65,14 +69,14 @@
     </div>
 
     <main id="blogPostsContainer" class="blog-posts">
-        <p style="text-align:center; color:var(--text-muted);">Caricamento delle recensioni in corso...</p>
+        <p style="text-align:center; color:var(--text-muted); padding: 40px;">Caricamento delle recensioni in corso...</p>
     </main>
 </div>
 
 <script>
-    // ⚠️ CONFIGURA QUESTI DUE DATI COL TUO USERNAME E IL NOME DELLA REPO
-    const GITHUB_USER = "IL_TUO_USERNAME_GITHUB"; 
-    const GITHUB_REPO = "IL_NOME_DELLA_REPO";
+    // ⚠️ INSERISCI QUI IL TUO USERNAME E IL NOME DELLA REPO
+    const GITHUB_USER = "mattwe-21-ops"; 
+    const GITHUB_REPO = "personal-library-reviews";
 
     let reviews = [];
     let activeAuthor = null;
@@ -85,27 +89,39 @@
     searchBar.addEventListener('input', renderBlog);
     clearFilterBtn.addEventListener('click', () => { activeAuthor = null; renderBlog(); });
 
-    // Carica tutti i file dalla cartella "recensioni" di GitHub
     async function loadReviewsFromGitHub() {
+        reviews = [];
+        blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">Controllo dei file su GitHub...</p>`;
+        
         try {
-            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni`;
+            // TRUCCO ANTI-CACHE: Aggiungiamo un numero casuale (?t=...) alla fine del link per costringere GitHub a darci i file reali appena caricati
+            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni?t=${Date.now()}`;
             const response = await fetch(url);
-            if (!response.ok) throw new Error("Nessuna recensione trovata o cartella vuota.");
+            
+            if (!response.ok) throw new Error("Ancora nessuna recensione caricata o cartella non trovata.");
             
             const files = await response.json();
             
-            // Filtra solo i file effettivi (esclude cartelle strane)
-            const fileEntries = files.filter(f => f.type === 'file');
+            // Escludiamo file segnaposto come il .gitkeep e prendiamo solo i veri file
+            const fileEntries = files.filter(f => f.type === 'file' && !f.name.startsWith('.'));
 
+            if (fileEntries.length === 0) {
+                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota. Carica un file per vederlo qui!</p>`;
+                renderAuthors();
+                return;
+            }
+
+            // Scarichiamo il contenuto di ogni file trovato
             for (let file of fileEntries) {
-                const fileRes = await fetch(file.download_url);
+                // Anche qui usiamo il trucco anti-cache per il singolo file
+                const fileRes = await fetch(`${file.download_url}?t=${Date.now()}`);
                 const fileContent = await fileRes.text();
 
-                // Estrae l'HTML interno al body
+                // Estraiamo il contenuto racchiuso nel body
                 const bodyMatch = fileContent.match(/<body>([\s\S]*?)<\/body>/i);
                 let cleanHTML = bodyMatch ? bodyMatch[1] : fileContent;
 
-                // Trova l'autore per i filtri
+                // Estraiamo l'autore per creare il filtro automatico
                 let author = "Sconosciuto";
                 const authorMatch = cleanHTML.match(/Autore del Libro:<\/td><td>([\s\S]*?)<\/td>/i);
                 if (authorMatch) {
@@ -115,9 +131,12 @@
                 reviews.push({ author: author, htmlContent: cleanHTML });
             }
 
+            // Mostriamo i post dal più nuovo al più vecchio
+            reviews.reverse();
             renderBlog();
+            
         } catch (err) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012;">${err.message}</p>`;
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px;">${err.message}</p>`;
         }
     }
 
@@ -127,11 +146,13 @@
 
         const filtered = reviews.filter(r => {
             const textContent = r.htmlContent.replace(/<\/?[^>]+(>|$)/g, "").toLowerCase();
-            return textContent.includes(searchText) && (activeAuthor ? r.author.toLowerCase() === activeAuthor.toLowerCase() : true);
+            const matchesSearch = textContent.includes(searchText);
+            const matchesAuthor = activeAuthor ? r.author.toLowerCase() === activeAuthor.toLowerCase() : true;
+            return matchesSearch && matchesAuthor;
         });
 
         if (filtered.length === 0) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:40px;">Nessuna recensione trovata.</p>`;
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:40px;">Nessuna recensione corrisponde alla ricerca.</p>`;
             return;
         }
 
@@ -163,6 +184,7 @@
         clearFilterBtn.style.display = activeAuthor ? 'inline' : 'none';
     }
 
+    // Avvio iniziale automatico
     loadReviewsFromGitHub();
 </script>
 </body>
