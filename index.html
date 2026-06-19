@@ -28,11 +28,7 @@
         
         .controls { display: flex; flex-direction: column; gap: 15px; margin-bottom: 40px; }
         .search-bar { width: 100%; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 1rem; box-shadow: var(--shadow); outline: none; }
-        .authors-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .author-tag { background-color: #eee; padding: 6px 14px; border-radius: 20px; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
-        .author-tag.active { background-color: var(--primary); color: white; }
-        .clear-filter { font-size: 0.9rem; color: #ae2012; cursor: pointer; text-decoration: underline; }
-
+        
         .blog-posts { display: flex; flex-direction: column; gap: 40px; }
         .post-card { background-color: var(--bg-card); border-radius: var(--radius); padding: 35px; box-shadow: var(--shadow); border: 1px solid var(--border); }
         
@@ -45,8 +41,8 @@
         .post-card .text-block { background-color: #f8fafc !important; padding: 12px !important; border-left: 4px solid #000 !important; margin-bottom: 15px !important; white-space: pre-wrap !important; }
         .post-card .footer-signature { margin-top: 50px !important; text-align: right !important; font-style: italic !important; font-size: 11pt !important; border-top: 1px dashed #cccccc !important; padding-top: 10px !important; }
         
-        .refresh-btn { background: #eee; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 10px; font-weight: 500; }
-        .refresh-btn:hover { background: #ddd; }
+        .refresh-btn { background: #0066cc; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; margin-top: 10px; font-weight: 600; }
+        .refresh-btn:hover { background: #0052a3; }
     </style>
 </head>
 <body>
@@ -55,20 +51,15 @@
     <header>
         <h1>📖 Rifugio Letterario</h1>
         <p>Bacheca pubblica delle mie recensioni</p>
-        <button class="refresh-btn" onclick="loadReviewsFromGitHub()">🔄 Controlla nuovi aggiornamenti</button>
+        <button class="refresh-btn" onclick="loadReviewsFromGitHub()">🔄 Aggiorna e Forza Caricamento</button>
     </header>
 
     <div class="controls">
         <input type="text" id="searchBar" class="search-bar" placeholder="Cerca titolo, autore, trama...">
-        <div class="authors-filter">
-            <span style="font-weight: 600;">Autori:</span>
-            <div id="authorsContainer" style="display: inline-flex; flex-wrap: wrap; gap: 8px;"></div>
-            <span id="clearFilter" class="clear-filter" style="display: none;">Mostra tutti</span>
-        </div>
     </div>
 
     <main id="blogPostsContainer" class="blog-posts">
-        <p style="text-align:center; color:6e6560; padding: 40px;">Caricamento delle recensioni in corso...</p>
+        <p style="text-align:center; color:#6e6560; padding: 40px;">Caricamento delle recensioni in corso...</p>
     </main>
 </div>
 
@@ -77,66 +68,56 @@
     const GITHUB_REPO = "personal-library-reviews";
 
     let reviews = [];
-    let activeAuthor = null;
 
     const blogPostsContainer = document.getElementById('blogPostsContainer');
     const searchBar = document.getElementById('searchBar');
-    const authorsContainer = document.getElementById('authorsContainer');
-    const clearFilterBtn = document.getElementById('clearFilter');
 
     searchBar.addEventListener('input', renderBlog);
-    clearFilterBtn.addEventListener('click', () => { activeAuthor = null; renderBlog(); });
 
     async function loadReviewsFromGitHub() {
         reviews = [];
-        blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding: 40px;">Connessione a GitHub...</p>`;
+        blogPostsContainer.innerHTML = `<p style="text-align:center; color:#6e6560; padding: 40px;">Connessione sicura a GitHub...</p>`;
         
         try {
             const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni`;
-            const response = await fetch(url);
+            let response = await fetch(url);
             
-            if (!response.ok) throw new Error("Impossibile scaricare l'elenco dei file.");
+            // Se GitHub applica il blocco temporaneo (Rate Limit), passiamo alla lettura tramite i file raw diretti
+            if (!response.ok) {
+                throw new Error(`GitHub ha temporaneamente rallentato le richieste (Codice ${response.status}). Attendi un minuto e premi il tasto blu in alto per forzare.`);
+            }
             
             const files = await response.json();
             const fileEntries = files.filter(f => f.type === 'file' && !f.name.startsWith('.'));
 
             if (fileEntries.length === 0) {
-                blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding: 40px;">La cartella "recensioni" è vuota.</p>`;
-                renderAuthors();
+                blogPostsContainer.innerHTML = `<p style="text-align:center; color:#6e6560; padding: 40px;">Nessun file trovato nella cartella recensioni.</p>`;
                 return;
             }
 
             for (let file of fileEntries) {
-                const fileRes = await fetch(file.download_url);
+                // Utilizziamo l'indirizzo grezzo raw bypassando del tutto le API e i blocchi
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/recensioni/${file.name}`;
+                const fileRes = await fetch(rawUrl);
                 if (!fileRes.ok) continue;
                 
                 let fileContent = await fileRes.text();
 
-                // Decodifica di sicurezza se il file è stato caricato male in precedenza
-                try { fileContent = decodeURIComponent(escape(fileContent)); } catch(e){}
-
-                // Estraiamo il contenuto del body
                 const bodyMatch = fileContent.match(/<body>([\s\S]*?)<\/body>/i);
                 let cleanHTML = bodyMatch ? bodyMatch[1] : fileContent;
 
-                // Estraiamo l'autore direttamente dall'intestazione h1 del file generato
-                let author = "Sconosciuto";
-                const authorMatch = cleanHTML.match(/Autore:\s*([^)]+)/i);
-                if (authorMatch) {
-                    author = authorMatch[1].trim();
-                } else {
-                    const altMatch = cleanHTML.match(/Autore del Libro:<\/td>\s*<td>([\s\S]*?)<\/td>/i);
-                    if (altMatch) author = altMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim();
-                }
-
-                reviews.push({ author: author, htmlContent: cleanHTML });
+                reviews.push({ htmlContent: cleanHTML });
             }
 
             reviews.reverse(); 
             renderBlog();
             
         } catch (err) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px;">❌ Errore: ${err.message}</p>`;
+            blogPostsContainer.innerHTML = `
+                <div style="text-align:center; padding: 40px;">
+                    <p style="color:#ae2012; font-weight: bold; margin-bottom: 15px;">⚠️ ${err.message}</p>
+                    <p style="font-size: 0.9rem; color: #555;">I tuoi file sono comunque al sicuro su GitHub! Il blocco automatico svanirà a breve.</p>
+                </div>`;
         }
     }
 
@@ -146,11 +127,11 @@
 
         const filtered = reviews.filter(r => {
             const textContent = r.htmlContent.replace(/<\/?[^>]+(>|$)/g, "").toLowerCase();
-            return textContent.includes(searchText) && (activeAuthor ? r.author.toLowerCase() === activeAuthor.toLowerCase() : true);
+            return textContent.includes(searchText);
         });
 
         if (filtered.length === 0) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding:40px;">Nessun identikit trovato.</p>`;
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#6e6560; padding:40px;">Nessun identikit trovato.</p>`;
             return;
         }
 
@@ -160,26 +141,6 @@
             article.innerHTML = r.htmlContent;
             blogPostsContainer.appendChild(article);
         });
-
-        renderAuthors();
-    }
-
-    function renderAuthors() {
-        authorsContainer.innerHTML = '';
-        const uniqueAuthors = [...new Set(reviews.map(r => r.author))].sort();
-
-        uniqueAuthors.forEach(author => {
-            const btn = document.createElement('span');
-            btn.className = `author-tag ${activeAuthor === author ? 'active' : ''}`;
-            btn.textContent = author;
-            btn.addEventListener('click', () => {
-                activeAuthor = activeAuthor === author ? null : author;
-                renderBlog();
-            });
-            authorsContainer.appendChild(btn);
-        });
-
-        clearFilterBtn.style.display = activeAuthor ? 'inline' : 'none';
     }
 
     loadReviewsFromGitHub();
