@@ -9,7 +9,6 @@
             --bg-main: #fcfbfa;
             --bg-card: #ffffff;
             --text-main: #2c2623;
-            --text-muted: #6e6560;
             --primary: #1a1a1a;
             --border: #e8e5e2;
             --shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
@@ -37,14 +36,14 @@
         .blog-posts { display: flex; flex-direction: column; gap: 40px; }
         .post-card { background-color: var(--bg-card); border-radius: var(--radius); padding: 35px; box-shadow: var(--shadow); border: 1px solid var(--border); }
         
-        /* Integrazione grafiche per i file dei libri */
-        .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; color: #000; text-align: center; }
-        .post-card table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .post-card td { padding: 8px; border-bottom: 1px solid #eeeeee; vertical-align: top; }
-        .post-card td.label { font-weight: bold; width: 35%; color: #000; }
-        .post-card .section-title { font-weight: bold; color: #000; margin-top: 25px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 3px; text-transform: uppercase; font-size: 11pt; }
-        .post-card .text-block { background-color: #f8fafc; padding: 12px; border-left: 4px solid #000; margin-bottom: 15px; white-space: pre-wrap; }
-        .post-card .footer-signature { margin-top: 50px; text-align: right; font-style: italic; font-size: 11pt; border-top: 1px dashed #cccccc; padding-top: 10px; }
+        /* Forziamo gli stili grafici originali del file .doc */
+        .post-card h1 { font-size: 18pt !important; margin-bottom: 20px !important; border-bottom: 2px solid #000 !important; padding-bottom: 10px !important; color: #000 !important; text-align: center !important; }
+        .post-card table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 20px !important; }
+        .post-card td { padding: 8px !important; border-bottom: 1px solid #eeeeee !important; vertical-align: top !important; }
+        .post-card td.label { font-weight: bold !important; width: 35% !important; color: #000 !important; }
+        .post-card .section-title { font-weight: bold !important; color: #000 !important; margin-top: 25px !important; margin-bottom: 10px !important; border-bottom: 1px solid #000 !important; padding-bottom: 3px !important; text-transform: uppercase !important; font-size: 11pt !important; }
+        .post-card .text-block { background-color: #f8fafc !important; padding: 12px !important; border-left: 4px solid #000 !important; margin-bottom: 15px !important; white-space: pre-wrap !important; }
+        .post-card .footer-signature { margin-top: 50px !important; text-align: right !important; font-style: italic !important; font-size: 11pt !important; border-top: 1px dashed #cccccc !important; padding-top: 10px !important; }
         
         .refresh-btn { background: #eee; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 10px; font-weight: 500; }
         .refresh-btn:hover { background: #ddd; }
@@ -69,7 +68,7 @@
     </div>
 
     <main id="blogPostsContainer" class="blog-posts">
-        <p style="text-align:center; color:var(--text-muted); padding: 40px;">Caricamento delle recensioni in corso...</p>
+        <p style="text-align:center; color:6e6560; padding: 40px;">Caricamento delle recensioni in corso...</p>
     </main>
 </div>
 
@@ -90,22 +89,19 @@
 
     async function loadReviewsFromGitHub() {
         reviews = [];
-        blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">Connessione a GitHub in corso...</p>`;
+        blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding: 40px;">Connessione a GitHub...</p>`;
         
         try {
-            // Link pulito senza trucchi di cache che bloccano l'API di GitHub
             const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni`;
             const response = await fetch(url);
             
-            if (!response.ok) {
-                throw new Error(`Errore di connessione a GitHub (Codice ${response.status}: ${response.statusText}). Verifica se la repository è pubblica.`);
-            }
+            if (!response.ok) throw new Error("Impossibile scaricare l'elenco dei file.");
             
             const files = await response.json();
             const fileEntries = files.filter(f => f.type === 'file' && !f.name.startsWith('.'));
 
             if (fileEntries.length === 0) {
-                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota su GitHub.</p>`;
+                blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding: 40px;">La cartella "recensioni" è vuota.</p>`;
                 renderAuthors();
                 return;
             }
@@ -114,15 +110,23 @@
                 const fileRes = await fetch(file.download_url);
                 if (!fileRes.ok) continue;
                 
-                const fileContent = await fileRes.text();
+                let fileContent = await fileRes.text();
 
+                // Decodifica di sicurezza se il file è stato caricato male in precedenza
+                try { fileContent = decodeURIComponent(escape(fileContent)); } catch(e){}
+
+                // Estraiamo il contenuto del body
                 const bodyMatch = fileContent.match(/<body>([\s\S]*?)<\/body>/i);
                 let cleanHTML = bodyMatch ? bodyMatch[1] : fileContent;
 
+                // Estraiamo l'autore direttamente dall'intestazione h1 del file generato
                 let author = "Sconosciuto";
-                const authorMatch = cleanHTML.match(/Autore del Libro:<\/td>\s*<td>([\s\S]*?)<\/td>/i);
+                const authorMatch = cleanHTML.match(/Autore:\s*([^)]+)/i);
                 if (authorMatch) {
-                    author = authorMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim();
+                    author = authorMatch[1].trim();
+                } else {
+                    const altMatch = cleanHTML.match(/Autore del Libro:<\/td>\s*<td>([\s\S]*?)<\/td>/i);
+                    if (altMatch) author = altMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim();
                 }
 
                 reviews.push({ author: author, htmlContent: cleanHTML });
@@ -132,8 +136,7 @@
             renderBlog();
             
         } catch (err) {
-            // Questo ora ci mostrerà il VERO motivo del blocco sullo schermo
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px; font-weight: bold;">❌ ${err.message}</p>`;
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px;">❌ Errore: ${err.message}</p>`;
         }
     }
 
@@ -147,7 +150,7 @@
         });
 
         if (filtered.length === 0) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:40px;">Nessuna recensione corrisponde alla ricerca.</p>`;
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:6e6560; padding:40px;">Nessun identikit trovato.</p>`;
             return;
         }
 
