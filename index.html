@@ -37,7 +37,7 @@
         .blog-posts { display: flex; flex-direction: column; gap: 40px; }
         .post-card { background-color: var(--bg-card); border-radius: var(--radius); padding: 35px; box-shadow: var(--shadow); border: 1px solid var(--border); }
         
-        /* Integrazione stili per i tuoi documenti doc */
+        /* Integrazione grafiche per i file dei libri */
         .post-card h1 { font-size: 18pt; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; color: #000; text-align: center; }
         .post-card table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .post-card td { padding: 8px; border-bottom: 1px solid #eeeeee; vertical-align: top; }
@@ -90,32 +90,35 @@
 
     async function loadReviewsFromGitHub() {
         reviews = [];
-        blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">Controllo dei file su GitHub...</p>`;
+        blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">Connessione a GitHub in corso...</p>`;
         
         try {
-            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni?t=${Date.now()}`;
+            // Link pulito senza trucchi di cache che bloccano l'API di GitHub
+            const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/recensioni`;
             const response = await fetch(url);
             
-            if (!response.ok) throw new Error("Ancora nessuna recensione caricata o cartella non trovata.");
+            if (!response.ok) {
+                throw new Error(`Errore di connessione a GitHub (Codice ${response.status}: ${response.statusText}). Verifica se la repository è pubblica.`);
+            }
             
             const files = await response.json();
             const fileEntries = files.filter(f => f.type === 'file' && !f.name.startsWith('.'));
 
             if (fileEntries.length === 0) {
-                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota. Carica un file dall'area riservata!</p>`;
+                blogPostsContainer.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding: 40px;">La cartella "recensioni" è vuota su GitHub.</p>`;
                 renderAuthors();
                 return;
             }
 
             for (let file of fileEntries) {
-                const fileRes = await fetch(`${file.download_url}?t=${Date.now()}`);
+                const fileRes = await fetch(file.download_url);
+                if (!fileRes.ok) continue;
+                
                 const fileContent = await fileRes.text();
 
-                // Estraiamo tutto ciò che sta dentro il tag html (visto che i tuoi file iniziano direttamente così)
                 const bodyMatch = fileContent.match(/<body>([\s\S]*?)<\/body>/i);
                 let cleanHTML = bodyMatch ? bodyMatch[1] : fileContent;
 
-                // NUOVO SISTEMA DI RICERCA AUTORE: Più robusto per i tuoi file personali
                 let author = "Sconosciuto";
                 const authorMatch = cleanHTML.match(/Autore del Libro:<\/td>\s*<td>([\s\S]*?)<\/td>/i);
                 if (authorMatch) {
@@ -125,11 +128,12 @@
                 reviews.push({ author: author, htmlContent: cleanHTML });
             }
 
-            reviews.reverse(); // Mostra i più nuovi in alto
+            reviews.reverse(); 
             renderBlog();
             
         } catch (err) {
-            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px;">${err.message}</p>`;
+            // Questo ora ci mostrerà il VERO motivo del blocco sullo schermo
+            blogPostsContainer.innerHTML = `<p style="text-align:center; color:#ae2012; padding: 40px; font-weight: bold;">❌ ${err.message}</p>`;
         }
     }
 
@@ -139,9 +143,7 @@
 
         const filtered = reviews.filter(r => {
             const textContent = r.htmlContent.replace(/<\/?[^>]+(>|$)/g, "").toLowerCase();
-            const matchesSearch = textContent.includes(searchText);
-            const matchesAuthor = activeAuthor ? r.author.toLowerCase() === activeAuthor.toLowerCase() : true;
-            return matchesSearch && matchesAuthor;
+            return textContent.includes(searchText) && (activeAuthor ? r.author.toLowerCase() === activeAuthor.toLowerCase() : true);
         });
 
         if (filtered.length === 0) {
